@@ -15,7 +15,9 @@ def enveloppe_extract(func_str):
         try:
             val_ret = execute_user_script()
             print(val_ret)            
-        except:
+        except Exception as e:
+            print("Script Error - trigger Exception:")
+            print(e)
             pass
         return val_ret
 

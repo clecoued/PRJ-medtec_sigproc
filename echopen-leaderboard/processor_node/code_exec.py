@@ -1,7 +1,40 @@
 import ast
-import pip 
 import numpy as np
 from PIL import Image
+import os.path
+
+def loadReferencesImages(rawImagesFolder, groundTruthImagesFolder):
+    rawImages = []
+    groundTruthImages = []
+
+    rawImagesPath = os.path.join(os.getcwd(), rawImagesFolder)
+    groundTruthImagesPath = os.path.join(os.getcwd(), groundTruthImagesFolder)
+    print rawImagesPath
+    print groundTruthImagesPath
+
+    validRawImageFormat = [".csv", ".gz"]
+    validGroundTruthImageFormat = [".bmp"]
+
+    # load raw images
+    for f in os.listdir(rawImagesPath):
+        ext = os.path.splitext(f)[1]
+        if ext.lower() not in validRawImageFormat:
+            continue
+
+        rawImage = np.loadtxt(os.path.join(rawImagesPath, f), delimiter=';')
+        rawImages.append( rawImage )
+
+    # load groundTruth images
+    for f in os.listdir(groundTruthImagesPath):
+        ext = os.path.splitext(f)[1]
+        if ext.lower() not in validGroundTruthImageFormat:
+            continue
+        # convert to grey level image and normalize intensity
+        image = Image.open(os.path.join(groundTruthImagesPath, f)).convert('L')
+        groundTruthImage = normImag(np.array(image))
+        groundTruthImages.append( groundTruthImage )
+
+    return {"rawImages": rawImages, "groundTruthImages": groundTruthImages}
 
 
 def normImag(A):
@@ -73,29 +106,51 @@ def execute_user_script():
                     if i in range(function.lineno,lastLine+1):
                         run_func = run_func +'\n'+ line
 
-
-
     exec str_func
     exec run_func
     import time
+
     val_ret = {'duration':'0','score':'10000'}    
-    im = Image.open("fantom.bmp").convert('L') # convert 'L' is to get a flat image, not RGB
-    groundTruth = normImag(np.array(im))
-    rawSignal = np.loadtxt("SinUs.csv.gz", delimiter=';')
+    
+    imageLoader = loadReferencesImages("raw_images", "ground_truth_images")
+
+    print len(imageLoader["rawImages"])
+    print len(imageLoader["groundTruthImages"])
+
+    rawImages = imageLoader["rawImages"]
+    groundTruthImages = imageLoader["groundTruthImages"]
+
+    if len(rawImages) != len(groundTruthImages):
+        raise Exception
+
     #recon = submit_function.reconstructImage(rawSignal,groundTruth.shape)
     #print('Score for Baseline method : ', score)
     #print('max Err between pixels for Baseline method : ', maxErr)
+    
     print 'install packages'
     install_packages()
     print 'install done'
-    start = time.clock()
-    print 'execute user script'
-    recon = run(rawSignal, groundTruth.shape)
-    end = time.clock()
-    print 'calculate score'
-    [score,maxErr] = estimateScore(groundTruth, recon)
-    val_ret["duration"] = (end - start)
-    val_ret["score"] = score
+
+    totalDuration = 0
+    totalScore = 0
+    for i in range(0, len(rawImages) ):
+        print 'Process Image ' + str(i)
+
+        start = time.clock()
+        print 'execute user script'
+        print str(len(rawImages)) + ' ' + str(len(groundTruthImages))
+
+        recon = run(rawImages[i], groundTruthImages[i].shape)
+        end = time.clock()
+
+        print 'calculate score'
+        [score,maxErr] = estimateScore(groundTruthImages[i], recon)
+
+        totalDuration +=  (end - start)
+        totalScore += score
+        
+    val_ret["duration"] = totalDuration
+    val_ret["score"] = totalScore
     print val_ret
     return val_ret
 
